@@ -80,7 +80,7 @@ class org_civicrm_sms_twilio extends CRM_SMS_Provider {
    * This is not needed for Twilio
    *
    * @return void
-   */ 
+   */
   function __construct($provider = array(
      ), $skipAuth = TRUE) {
     // initialize vars
@@ -134,7 +134,7 @@ class org_civicrm_sms_twilio extends CRM_SMS_Provider {
    * @access public
    * @since 1.1
    */
-  function authenticate() { 
+  function authenticate() {
       return (TRUE);
   }
 
@@ -191,4 +191,32 @@ class org_civicrm_sms_twilio extends CRM_SMS_Provider {
     $fromPhone = $this->retrieve('From', 'String');
     return parent::processInbound($fromPhone, $this->retrieve('Body', 'String'), NULL, $this->retrieve('SmsSid', 'String'));
   }
+
+  /**
+   * Delete Twilio's copy of all SMS messages, both inbound and outbound, before
+   * that date.
+   *
+   * @param DateTime $targetDate
+   * @param int $maxToDelete
+   */
+  public function deleteTwilioCopiesBeforeDate($allowedAgeInMonths, $maxToDelete) {
+    $targetDate = date('m/d/Y', strtotime('-' . $allowedAgeInMonths . ' months'));
+
+    $activitiesToDelete = civicrm_api3('Activity', 'get', array(
+      'count' => $maxToDelete, 
+      'activity_type_id' => array('IN' => array('SMS', 'Inbound SMS')),
+      'activity_date_time' => array('<=' => $targetDate),
+      //'custom_135' => '0',
+      'return' => array('return'),
+    ));
+    
+    foreach($activitiesToDelete['values'] as $eachActivityToDelete) {
+      $this->_twilioClient->messages($eachActivityToDelete['result'])->delete();
+      civicrm_api3('Activity', 'create', array(
+        'id' => $eachActivityToDelete['id'],
+        'custom_135' => 1,
+      ));
+    }
+  }
+
 }
