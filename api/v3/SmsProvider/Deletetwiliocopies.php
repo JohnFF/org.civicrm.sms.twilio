@@ -27,8 +27,10 @@ function _civicrm_api3_sms_provider_Deletetwiliocopies_spec(&$spec) {
 function civicrm_api3_sms_provider_Deletetwiliocopies($params) {
   $maxToDelete = $params['max_to_delete'] ? $params['max_to_delete'] : 25;
 
-  require_once '/srv/www/krystalclone/sites/default/files/civicrm/ext/org.civicrm.sms.twilio/org_civicrm_sms_twilio.php';
+  require_once CRM_Core_Config::singleton()->extensionsDir . 'org.civicrm.sms.twilio/org_civicrm_sms_twilio.php';
 
   $twilio = org_civicrm_sms_twilio::singleton($params);
-  $twilio->deleteTwilioCopiesBeforeDate($params['allowed_age_in_months'], $maxToDelete);
+  $messagesDeleted = $twilio->deleteTwilioCopiesBeforeDate($params['allowed_age_in_months'], $maxToDelete);
+
+  return civicrm_api3_create_success(array('Messages deleted' => $messagesDeleted), $params, 'SmsProvider', 'Deletetwiliocopies');
 }

@@ -196,27 +196,53 @@ class org_civicrm_sms_twilio extends CRM_SMS_Provider {
    * Delete Twilio's copy of all SMS messages, both inbound and outbound, before
    * that date.
    *
-   * @param DateTime $targetDate
+   * @param int $allowedAgeInMonths
    * @param int $maxToDelete
    */
   public function deleteTwilioCopiesBeforeDate($allowedAgeInMonths, $maxToDelete) {
-    $targetDate = date('m/d/Y', strtotime('-' . $allowedAgeInMonths . ' months'));
+    $targetDateRaw = date('m/d/Y', strtotime('-' . $allowedAgeInMonths . ' months'));
+    $targetDate = new DateTime($targetDateRaw);
 
-    $activitiesToDelete = civicrm_api3('Activity', 'get', array(
-      'count' => $maxToDelete, 
-      'activity_type_id' => array('IN' => array('SMS', 'Inbound SMS')),
-      'activity_date_time' => array('<=' => $targetDate),
-      //'custom_135' => '0',
-      'return' => array('return'),
+    $getSmsActivityIdsToDelete = 'SELECT civicrm_activity.id, civicrm_activity.result
+      FROM civicrm_activity LEFT JOIN civicrm_value_twilio_sent_s_29 ON civicrm_activity.id = civicrm_value_twilio_sent_s_29.entity_id
+      WHERE activity_type_id IN (44, 45) AND
+        (deleted_provider_copy_135 = 0 OR deleted_provider_copy_135 IS NULL) AND
+        activity_date_time <= %1
+      LIMIT %2';
+
+    $activitiesToDelete = CRM_Core_DAO::executeQuery($getSmsActivityIdsToDelete, array(
+      1 => array($targetDate->format('Y-m-d H:i:s'), 'String'),
+      2 => array($maxToDelete, 'Int'),
     ));
-    
-    foreach($activitiesToDelete['values'] as $eachActivityToDelete) {
-      $this->_twilioClient->messages($eachActivityToDelete['result'])->delete();
+
+    $messagesDeleted = 0;
+
+    while ($activitiesToDelete->fetch()) {
+      $twilioId = $activitiesToDelete->result;
+      $responses[] = $this->_twilioClient->messages($twilioId)->delete();
+      $messagesDeleted++;
       civicrm_api3('Activity', 'create', array(
-        'id' => $eachActivityToDelete['id'],
+        'id' => $activitiesToDelete->id,
         'custom_135' => 1,
       ));
     }
+//    $activitiesToDelete = civicrm_api3('Activity', 'get', array(
+//      'count' => $maxToDelete,
+//      'activity_type_id' => array('IN' => array('SMS', 'Inbound SMS')),
+//      'activity_date_time' => array('<=' => $targetDate),
+//     // 'custom_135' => '0',
+//      'return' => array('result'),
+//    ));
+//
+//    foreach($activitiesToDelete['values'] as $eachActivityToDelete) {
+//      $this->_twilioClient->messages($eachActivityToDelete['result'])->delete();
+//      civicrm_api3('Activity', 'create', array(
+//        'id' => $eachActivityToDelete['id'],
+//        'custom_135' => 1,
+//      ));
+//    }
+
+    return $messagesDeleted;
   }
 
 }
